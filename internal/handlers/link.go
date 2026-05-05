@@ -15,6 +15,27 @@ import (
 	"github.com/vitorhugo-java/go-link-shortener/internal/models"
 )
 
+// stagingTemplate is returned on the first visit to the creation URL.
+// JavaScript reads window.location.hash (the URL fragment, which browsers never
+// send to the server) and re-navigates with the fragment encoded as the "_f"
+// query parameter, alongside "_c=1" to signal the confirmed/second request.
+const stagingTemplate = `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><title>Creating short link…</title></head>
+<body>
+<script>
+(function(){
+  var hash = window.location.hash;
+  var qs   = window.location.search;
+  var sep  = qs ? '&' : '?';
+  var extra = '_c=1' + (hash ? '&_f=' + encodeURIComponent(hash.slice(1)) : '');
+  window.location.replace(window.location.pathname + qs + sep + extra);
+})();
+</script>
+<noscript>JavaScript is required to create short links. If your target URL contains a <code>#</code> fragment, please percent-encode it as <code>%23</code> before using this service.</noscript>
+</body>
+</html>`
+
 const htmlTemplate = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -69,7 +90,26 @@ func (h *Handler) CreateLink(c fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).SendString("slug and target URL are required")
 	}
 
-	qs := string(c.Request().URI().QueryString())
+	// Phase 1 – first visit: return a staging page so the browser's JavaScript
+	// can capture window.location.hash (URL fragments are never sent to the
+	// server by browsers) and re-submit as the "_f" query parameter.
+	if c.Query("_c") != "1" {
+		c.Set(fiber.HeaderContentType, fiber.MIMETextHTMLCharsetUTF8)
+		return c.SendString(stagingTemplate)
+	}
+
+	// Phase 2 – confirmed request: build the full target URL.
+	// Strip the internal "_c" and "_f" parameters before storing.
+	rawQS := string(c.Request().URI().QueryString())
+	qvals, err := url.ParseQuery(rawQS)
+	if err != nil {
+		qvals = url.Values{}
+	}
+	fragment := qvals.Get("_f")
+	qvals.Del("_c")
+	qvals.Del("_f")
+	qs := qvals.Encode()
+
 	targetURL := pathTail
 	if qs != "" {
 		targetURL = pathTail + "?" + qs
@@ -79,7 +119,14 @@ func (h *Handler) CreateLink(c fiber.Ctx) error {
 		targetURL = "https://" + targetURL
 	}
 
-	parsed, err := url.ParseRequestURI(targetURL)
+	// Append the fragment captured by JavaScript (if any).
+	if fragment != "" {
+		targetURL += "#" + fragment
+	}
+
+	// url.Parse (instead of url.ParseRequestURI) correctly handles URLs that
+	// contain a fragment component such as https://example.com/#section.
+	parsed, err := url.Parse(targetURL)
 	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
 		return c.Status(fiber.StatusBadRequest).SendString("invalid target URL")
 	}
