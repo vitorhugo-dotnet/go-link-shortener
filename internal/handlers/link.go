@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-playground/validator/v10"
 	"github.com/gofiber/fiber/v3"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
@@ -14,6 +15,8 @@ import (
 	"github.com/vitorhugo-java/go-link-shortener/internal/database"
 	"github.com/vitorhugo-java/go-link-shortener/internal/models"
 )
+
+var validate = validator.New()
 
 // stagingTemplate is returned on the first visit to the creation URL.
 // JavaScript reads window.location.hash (the URL fragment, which browsers never
@@ -129,6 +132,15 @@ func (h *Handler) CreateLink(c fiber.Ctx) error {
 	parsed, err := url.Parse(targetURL)
 	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
 		return c.Status(fiber.StatusBadRequest).SendString("invalid target URL")
+	}
+
+	// Validate the fully assembled URL against the CreateLinkRequest constraints.
+	// This covers both structural validity and the 2048-character ceiling that
+	// guards against oversized query strings or deeply-nested path segments that
+	// only become apparent after fragment re-assembly in phase 2.
+	req := models.CreateLinkRequest{Slug: slug, OriginalURL: targetURL}
+	if err := validate.Struct(req); err != nil {
+		return c.Status(fiber.StatusBadRequest).SendString("invalid request: " + err.Error())
 	}
 
 	if err := database.SaveLink(h.pg, slug, targetURL); err != nil {
