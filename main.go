@@ -38,6 +38,13 @@ func main() {
 		Expiration: time.Minute,
 	}))
 
+	formLimiter := limiter.New(limiter.Config{
+		Max:        2,
+		Expiration: 10 * time.Second,
+	})
+
+	app.Get("/", h.ShowForm)
+	app.Post("/", formLimiter, h.CreateLinkForm)
 	app.Get("/:slug", h.RedirectLink)
 	app.Get("/:slug/*", h.CreateLink)
 
