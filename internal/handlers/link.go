@@ -108,25 +108,42 @@ button:hover{background:#2ea043}
 <div class="card">
   <h1>&#128279; Encurtador de Links</h1>
   %s
-  <form method="POST" action="/">
+  <form method="POST" action="/" toolautosubmit toolname="create_short_link" tooldescription="Create a short URL with a user-provided alias that redirects to an HTTP or HTTPS URL.">
     <label for="url">URL a encurtar</label>
-    <input id="url" name="url" type="text" placeholder="https://exemplo.com/link-longo" value="%s" required>
+    <input id="url" name="url" type="text" placeholder="https://exemplo.com/link-longo" value="%s" maxlength="2048" required toolparamdescription="Target HTTP or HTTPS URL, required, maximum 2048 characters.">
     <label for="alias">Alias desejado</label>
-    <input id="alias" name="alias" type="text" placeholder="meu-link" value="%s" maxlength="100" required>
+    <input id="alias" name="alias" type="text" placeholder="meu-link" value="%s" maxlength="100" required toolparamdescription="Alias using only letters, numbers, and hyphens; required, maximum 100 characters.">
     <button type="submit">Encurtar</button>
   </form>
 </div>
+<script src="/web/webmcp.js" defer></script>
 </body>
 </html>`
 
 type Handler struct {
-	pg  *pgxpool.Pool
-	rdb *redis.Client
-	cfg *config.Config
+	pg              *pgxpool.Pool
+	rdb             *redis.Client
+	cfg             *config.Config
+	lookupLink      func(string) (database.LinkDetails, error)
+	lookupAnalytics func(string) (database.LinkAnalytics, error)
 }
 
 func New(pg *pgxpool.Pool, rdb *redis.Client, cfg *config.Config) *Handler {
-	return &Handler{pg: pg, rdb: rdb, cfg: cfg}
+	h := &Handler{pg: pg, rdb: rdb, cfg: cfg}
+	h.lookupLink = func(alias string) (database.LinkDetails, error) {
+		if targetURL, err := database.CacheGet(h.rdb, alias); err == nil && targetURL != "" {
+			return database.LinkDetails{Slug: alias, OriginalURL: targetURL}, nil
+		}
+		link, err := database.GetLinkDetails(h.pg, alias)
+		if err == nil {
+			_ = database.CacheSet(h.rdb, link.Slug, link.OriginalURL)
+		}
+		return link, err
+	}
+	h.lookupAnalytics = func(alias string) (database.LinkAnalytics, error) {
+		return database.GetLinkAnalytics(h.pg, alias)
+	}
+	return h
 }
 
 func (h *Handler) ShowForm(c fiber.Ctx) error {

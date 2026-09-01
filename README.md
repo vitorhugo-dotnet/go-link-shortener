@@ -37,6 +37,31 @@ GET http://localhost:3000/my-slug
 
 Redirects to the stored target URL.
 
+## WebMCP
+
+The home page exposes the existing creation form as `create_short_link` for
+WebMCP-enabled browsers. It also registers read-only `resolve_short_link` and
+`get_link_analytics` tools. The read tools return the destination or aggregate
+click count and latest click timestamp; they never expose visitor IP addresses,
+User-Agent strings, referrers, or individual click events.
+
+WebMCP is a progressive enhancement: browsers without it continue to use the
+normal form and redirects. It requires an origin-isolated document.
+
+### Test locally
+
+1. In Chrome, enable `chrome://flags/#enable-webmcp-testing` and relaunch.
+2. Start the application and open its home page in Chrome.
+3. Use the Model Context Tool Inspector extension to confirm these tools are
+   discoverable: `create_short_link`, `resolve_short_link`, and
+   `get_link_analytics`.
+4. Ask the agent to create `/webmcp` for
+   `https://developer.chrome.com/docs/ai/webmcp`; it should use the visible
+   form tool rather than clicking through the page.
+5. Ask where `/webmcp` redirects, open the short URL a few times, then ask for
+   traffic. The agent should use the two read-only tools and report aggregate
+   metrics.
+
 ## Environment Variables
 
 | Variable    | Description                                      | Default           |
