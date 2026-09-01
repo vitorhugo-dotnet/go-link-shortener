@@ -8,6 +8,7 @@ services:
       - REDIS_URL=redis://redis:6379
       - PORT=3000
       - APP_HOST=localhost:3000
+      - WEBMCP_ORIGIN_TRIAL_TOKEN=${WEBMCP_ORIGIN_TRIAL_TOKEN:-}
     depends_on:
       postgres:
         condition: service_healthy
