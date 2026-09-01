@@ -10,6 +10,7 @@ import (
 	"github.com/vitorhugo-java/go-link-shortener/internal/config"
 	"github.com/vitorhugo-java/go-link-shortener/internal/database"
 	"github.com/vitorhugo-java/go-link-shortener/internal/handlers"
+	"github.com/vitorhugo-java/go-link-shortener/internal/middleware"
 )
 
 //go:embed web/webmcp.js
@@ -36,6 +37,7 @@ func main() {
 	app := fiber.New(fiber.Config{
 		AppName: "go-link-shortener",
 	})
+	app.Use(middleware.OriginIsolation())
 
 	app.Use(limiter.New(limiter.Config{
 		Max:        100,
