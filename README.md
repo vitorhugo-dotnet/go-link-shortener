@@ -70,6 +70,7 @@ normal form and redirects. It requires an origin-isolated document.
 | `REDIS_URL` | Redis URL (`redis://host:port`)                  | —                 |
 | `PORT`      | HTTP listen port                                 | `3000`            |
 | `APP_HOST`  | Hostname used in the generated short link        | `localhost:<PORT>`|
+| `WEBMCP_ORIGIN_TRIAL_TOKEN` | Optional WebMCP Origin Trial token, emitted as the `Origin-Trial` response header | — |
 
 ## Project Structure
 

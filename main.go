@@ -37,7 +37,7 @@ func main() {
 	app := fiber.New(fiber.Config{
 		AppName: "go-link-shortener",
 	})
-	app.Use(middleware.OriginIsolation())
+	app.Use(middleware.OriginIsolation(cfg.WebMCPOriginTrialToken))
 
 	app.Use(limiter.New(limiter.Config{
 		Max:        100,
