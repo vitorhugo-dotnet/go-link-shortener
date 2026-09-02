@@ -1,6 +1,7 @@
 package main
 
 import (
+	_ "embed"
 	"log"
 	"time"
 
@@ -9,7 +10,11 @@ import (
 	"github.com/vitorhugo-java/go-link-shortener/internal/config"
 	"github.com/vitorhugo-java/go-link-shortener/internal/database"
 	"github.com/vitorhugo-java/go-link-shortener/internal/handlers"
+	"github.com/vitorhugo-java/go-link-shortener/internal/middleware"
 )
+
+//go:embed web/webmcp.js
+var webMCPScript string
 
 func main() {
 	cfg := config.Load()
@@ -32,6 +37,7 @@ func main() {
 	app := fiber.New(fiber.Config{
 		AppName: "go-link-shortener",
 	})
+	app.Use(middleware.OriginIsolation(cfg.WebMCPOriginTrialToken))
 
 	app.Use(limiter.New(limiter.Config{
 		Max:        100,
@@ -45,6 +51,12 @@ func main() {
 
 	app.Get("/", h.ShowForm)
 	app.Post("/", formLimiter, h.CreateLinkForm)
+	app.Get("/api/links/:alias/analytics", h.GetLinkAnalytics)
+	app.Get("/api/links/:alias", h.GetLink)
+	app.Get("/web/webmcp.js", func(c fiber.Ctx) error {
+		c.Set(fiber.HeaderContentType, "application/javascript; charset=utf-8")
+		return c.SendString(webMCPScript)
+	})
 	app.Get("/:slug", h.RedirectLink)
 	app.Get("/:slug/*", h.CreateLink)
 

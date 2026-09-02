@@ -11,6 +11,16 @@ import (
 	"github.com/vitorhugo-java/go-link-shortener/internal/models"
 )
 
+type LinkDetails struct {
+	Slug        string
+	OriginalURL string
+}
+
+type LinkAnalytics struct {
+	TotalClicks   int
+	LastClickedAt *time.Time
+}
+
 //go:embed migrations/001_init.sql
 var migrationSQL string
 
@@ -47,6 +57,47 @@ func GetLinkURL(pool *pgxpool.Pool, slug string) (string, error) {
 		slug,
 	).Scan(&originalURL)
 	return originalURL, err
+}
+
+func GetLinkDetails(pool *pgxpool.Pool, slug string) (LinkDetails, error) {
+	var link LinkDetails
+	err := pool.QueryRow(
+		context.Background(),
+		`SELECT slug, original_url FROM links WHERE slug = $1`,
+		slug,
+	).Scan(&link.Slug, &link.OriginalURL)
+	return link, err
+}
+
+func GetLinkAnalytics(pool *pgxpool.Pool, slug string) (LinkAnalytics, error) {
+	var data []byte
+	err := pool.QueryRow(
+		context.Background(),
+		`SELECT analytics FROM links WHERE slug = $1`,
+		slug,
+	).Scan(&data)
+	if err != nil {
+		return LinkAnalytics{}, err
+	}
+	return decodeAnalyticsSummary(data)
+}
+
+func decodeAnalyticsSummary(data []byte) (LinkAnalytics, error) {
+	var events []struct {
+		Timestamp time.Time `json:"timestamp"`
+	}
+	if err := json.Unmarshal(data, &events); err != nil {
+		return LinkAnalytics{}, err
+	}
+
+	summary := LinkAnalytics{TotalClicks: len(events)}
+	for _, event := range events {
+		if summary.LastClickedAt == nil || event.Timestamp.After(*summary.LastClickedAt) {
+			timestamp := event.Timestamp
+			summary.LastClickedAt = &timestamp
+		}
+	}
+	return summary, nil
 }
 
 func AppendClickEvent(pool *pgxpool.Pool, slug string, event models.ClickEvent) {
